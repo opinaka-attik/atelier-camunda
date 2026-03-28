@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
+                  id="Definitions_04"
+                  targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <!-- Module 04 : Human Task (User Task) + Tasklist Camunda -->
+  <bpmn:process id="human-task-process" name="04 - Human Task Approbation" isExecutable="true">
+
+    <bpmn:startEvent id="Start" name="Conge demande">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <!-- Service Task : verifier solde conge -->
+    <bpmn:serviceTask id="Task_Check" name="Verifier Solde Conge">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="check-leave-balance" retries="3" />
+        <zeebe:ioMapping>
+          <zeebe:input source="=employeeId" target="employeeId" />
+          <zeebe:input source="=nbJours" target="nbJours" />
+          <zeebe:output source="=soldeDisponible" target="soldeDisponible" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- User Task : validation manager -->
+    <bpmn:userTask id="Task_Approve" name="Valider Conge Manager">
+      <bpmn:extensionElements>
+        <zeebe:assignmentDefinition assignee="=managerId" candidateGroups="managers" />
+        <zeebe:formDefinition formKey="camunda-forms:bpmn:form_approbation" />
+        <zeebe:ioMapping>
+          <zeebe:input source="=employeeId" target="employeeId" />
+          <zeebe:input source="=nbJours" target="nbJours" />
+          <zeebe:input source="=soldeDisponible" target="soldeDisponible" />
+          <zeebe:output source="=decision" target="decision" />
+          <zeebe:output source="=commentaire" target="commentaire" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Gateway decision -->
+    <bpmn:exclusiveGateway id="GW_Decision" name="Decision?">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_Approved</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Rejected</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:serviceTask id="Task_NotifyOK" name="Notifier Approbation">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="notify-employee" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Approved</bpmn:incoming>
+      <bpmn:outgoing>Flow_End1</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_NotifyKO" name="Notifier Refus">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="notify-employee" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Rejected</bpmn:incoming>
+      <bpmn:outgoing>Flow_End2</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="End1" name="Conge approuve"><bpmn:incoming>Flow_End1</bpmn:incoming></bpmn:endEvent>
+    <bpmn:endEvent id="End2" name="Conge refuse"><bpmn:incoming>Flow_End2</bpmn:incoming></bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Start" targetRef="Task_Check" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_Check" targetRef="Task_Approve" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Task_Approve" targetRef="GW_Decision" />
+    <bpmn:sequenceFlow id="Flow_Approved" name="approuve" sourceRef="GW_Decision" targetRef="Task_NotifyOK">
+      <bpmn:conditionExpression>=decision = "approuve"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Rejected" name="refuse" sourceRef="GW_Decision" targetRef="Task_NotifyKO">
+      <bpmn:conditionExpression>=decision = "refuse"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_End1" sourceRef="Task_NotifyOK" targetRef="End1" />
+    <bpmn:sequenceFlow id="Flow_End2" sourceRef="Task_NotifyKO" targetRef="End2" />
+
+  </bpmn:process>
+
+</bpmn:definitions>
