@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
+                  id="Definitions_03"
+                  targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <!-- Module 03 : Gateway Exclusif (XOR) + conditions FEEL -->
+  <bpmn:process id="gateway-process" name="03 - Gateway Condition" isExecutable="true">
+
+    <bpmn:startEvent id="Start" name="Demande de credit">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <!-- Evaluer score -->
+    <bpmn:serviceTask id="Task_Score" name="Evaluer Score Credit">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="evaluate-score" retries="3" />
+        <zeebe:ioMapping>
+          <zeebe:input source="=montant" target="montant" />
+          <zeebe:input source="=revenu" target="revenu" />
+          <zeebe:output source="=score" target="score" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Gateway XOR -->
+    <bpmn:exclusiveGateway id="GW_Score" name="Score suffisant?">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_Approve</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Review</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Reject</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <!-- Branche 1 : Approuver (score >= 700) -->
+    <bpmn:serviceTask id="Task_Approve" name="Approuver Credit">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="approve-credit" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Approve</bpmn:incoming>
+      <bpmn:outgoing>Flow_End1</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Branche 2 : Revue manuelle (500-699) -->
+    <bpmn:serviceTask id="Task_Review" name="Revue Manuelle">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="manual-review" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Review</bpmn:incoming>
+      <bpmn:outgoing>Flow_End2</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Branche 3 : Rejeter (score < 500) -->
+    <bpmn:serviceTask id="Task_Reject" name="Rejeter Demande">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="reject-credit" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Reject</bpmn:incoming>
+      <bpmn:outgoing>Flow_End3</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="End1" name="Credit approuve"><bpmn:incoming>Flow_End1</bpmn:incoming></bpmn:endEvent>
+    <bpmn:endEvent id="End2" name="En revue"><bpmn:incoming>Flow_End2</bpmn:incoming></bpmn:endEvent>
+    <bpmn:endEvent id="End3" name="Credit rejete"><bpmn:incoming>Flow_End3</bpmn:incoming></bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Start" targetRef="Task_Score" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_Score" targetRef="GW_Score" />
+    <bpmn:sequenceFlow id="Flow_Approve" name="score >= 700" sourceRef="GW_Score" targetRef="Task_Approve">
+      <bpmn:conditionExpression>=score >= 700</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Review" name="500 &lt;= score &lt; 700" sourceRef="GW_Score" targetRef="Task_Review">
+      <bpmn:conditionExpression>=score >= 500 and score &lt; 700</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Reject" name="score &lt; 500" sourceRef="GW_Score" targetRef="Task_Reject">
+      <bpmn:conditionExpression>=score &lt; 500</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_End1" sourceRef="Task_Approve" targetRef="End1" />
+    <bpmn:sequenceFlow id="Flow_End2" sourceRef="Task_Review" targetRef="End2" />
+    <bpmn:sequenceFlow id="Flow_End3" sourceRef="Task_Reject" targetRef="End3" />
+
+  </bpmn:process>
+
+</bpmn:definitions>
