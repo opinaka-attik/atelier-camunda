@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
+                  id="Definitions_02"
+                  targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <bpmn:process id="service-task-process" name="02 - Service Task" isExecutable="true">
+
+    <bpmn:startEvent id="Start_1" name="Commande recue">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <!-- Service Task 1 : Verifier stock -->
+    <bpmn:serviceTask id="Task_Stock" name="Verifier Stock">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="check-stock" retries="3" />
+        <zeebe:ioMapping>
+          <zeebe:input source="=productId" target="productId" />
+          <zeebe:output source="=stockAvailable" target="stockAvailable" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Service Task 2 : Calculer prix -->
+    <bpmn:serviceTask id="Task_Price" name="Calculer Prix">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="calculate-price" retries="3" />
+        <zeebe:ioMapping>
+          <zeebe:input source="=quantity" target="quantity" />
+          <zeebe:input source="=unitPrice" target="unitPrice" />
+          <zeebe:output source="=totalPrice" target="totalPrice" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Service Task 3 : Envoyer confirmation -->
+    <bpmn:serviceTask id="Task_Confirm" name="Envoyer Confirmation">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="send-confirmation" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="End_1" name="Commande confirmee">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Start_1" targetRef="Task_Stock" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_Stock" targetRef="Task_Price" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Task_Price" targetRef="Task_Confirm" />
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="Task_Confirm" targetRef="End_1" />
+
+  </bpmn:process>
+
+</bpmn:definitions>
