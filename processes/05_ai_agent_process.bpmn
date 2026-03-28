@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
+                  id="Definitions_05"
+                  targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <!-- Module 05 : AI Agent + Groq LLM integre dans un workflow BPMN -->
+  <bpmn:process id="ai-agent-process" name="05 - AI Agent Analyse" isExecutable="true">
+
+    <bpmn:startEvent id="Start" name="Document recu">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <!-- Service Task : extraire texte -->
+    <bpmn:serviceTask id="Task_Extract" name="Extraire Texte">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="extract-text" retries="3" />
+        <zeebe:ioMapping>
+          <zeebe:input source="=documentUrl" target="documentUrl" />
+          <zeebe:output source="=texte" target="texte" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Service Task : AI Analyse via Groq -->
+    <bpmn:serviceTask id="Task_AI" name="AI Analyse Groq">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="ai-analyze" retries="3" />
+        <zeebe:ioMapping>
+          <zeebe:input source="=texte" target="texte" />
+          <zeebe:input source="=analyseType" target="analyseType" />
+          <zeebe:output source="=resume" target="resume" />
+          <zeebe:output source="=sentiment" target="sentiment" />
+          <zeebe:output source="=score_confiance" target="score_confiance" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Gateway : score confiance -->
+    <bpmn:exclusiveGateway id="GW_Confidence" name="Confiance suffisante?">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_Auto</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Human</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <!-- Branche auto : traitement automatique -->
+    <bpmn:serviceTask id="Task_AutoProcess" name="Traitement Automatique">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="auto-process" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Auto</bpmn:incoming>
+      <bpmn:outgoing>Flow_End1</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Branche human : revue humaine -->
+    <bpmn:userTask id="Task_HumanReview" name="Revue Humaine Requise">
+      <bpmn:extensionElements>
+        <zeebe:assignmentDefinition candidateGroups="analysts" />
+        <zeebe:ioMapping>
+          <zeebe:input source="=resume" target="resume" />
+          <zeebe:input source="=sentiment" target="sentiment" />
+          <zeebe:input source="=score_confiance" target="score_confiance" />
+          <zeebe:output source="=decision_humaine" target="decision_humaine" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Human</bpmn:incoming>
+      <bpmn:outgoing>Flow_End2</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:endEvent id="End1" name="Traite automatiquement"><bpmn:incoming>Flow_End1</bpmn:incoming></bpmn:endEvent>
+    <bpmn:endEvent id="End2" name="Traite par humain"><bpmn:incoming>Flow_End2</bpmn:incoming></bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Start" targetRef="Task_Extract" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_Extract" targetRef="Task_AI" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Task_AI" targetRef="GW_Confidence" />
+    <bpmn:sequenceFlow id="Flow_Auto" name="confiance >= 0.85" sourceRef="GW_Confidence" targetRef="Task_AutoProcess">
+      <bpmn:conditionExpression>=score_confiance >= 0.85</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Human" name="confiance &lt; 0.85" sourceRef="GW_Confidence" targetRef="Task_HumanReview">
+      <bpmn:conditionExpression>=score_confiance &lt; 0.85</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_End1" sourceRef="Task_AutoProcess" targetRef="End1" />
+    <bpmn:sequenceFlow id="Flow_End2" sourceRef="Task_HumanReview" targetRef="End2" />
+
+  </bpmn:process>
+
+</bpmn:definitions>
